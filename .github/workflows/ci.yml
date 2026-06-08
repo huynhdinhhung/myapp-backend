@@ -44,13 +44,33 @@ jobs:
 
       - name: Build Docker image
         run: |
+          SHORT_SHA=${GITHUB_SHA::7}
           docker build \
             -t $IMAGE_NAME:latest \
-            -t $IMAGE_NAME:${{ github.sha }} \
+            -t $IMAGE_NAME:$SHORT_SHA \
             .
 
       - name: Push Docker image
         if: github.event_name == 'push'
         run: |
+          SHORT_SHA=${GITHUB_SHA::7}
           docker push $IMAGE_NAME:latest
-          docker push $IMAGE_NAME:${{ github.sha }}
+          docker push $IMAGE_NAME:$SHORT_SHA
+
+      - name: Update GitOps backend image tag
+        if: github.event_name == 'push'
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+
+          git clone https://x-access-token:${{ secrets.GITOPS_TOKEN }}@github.com/huynhdinhhung/myapp-gitops.git
+
+          cd myapp-gitops
+
+          sed -i "s|image: ghcr.io/huynhdinhhung/myapp-backend:.*|image: ghcr.io/huynhdinhhung/myapp-backend:$SHORT_SHA|g" environments/dev/backend-deployment.yaml
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add environments/dev/backend-deployment.yaml
+          git commit -m "update backend image to $SHORT_SHA" || echo "No changes to commit"
+          git push origin main
